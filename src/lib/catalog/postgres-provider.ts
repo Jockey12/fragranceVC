@@ -46,6 +46,7 @@ type SyncStateRow = {
   total_prefixes: number;
   last_prefix: string | null;
   latest_batch_count: number;
+  updated_at: string;
 };
 
 const FRAGELLA_SYNC_LOCK_KEY = 782331;
@@ -86,7 +87,7 @@ async function ensureSyncStateTable(sql: ReturnType<typeof postgres>) {
 
 async function readSyncState(sql: ReturnType<typeof postgres>) {
   const rows = await sql<SyncStateRow[]>`
-    select status, queue, processed_prefixes, total_prefixes, last_prefix, latest_batch_count
+    select status, queue, processed_prefixes, total_prefixes, last_prefix, latest_batch_count, updated_at
     from fragrance_cache_sync_state
     where id = 1
   `;
@@ -359,6 +360,19 @@ export async function countPostgresFragrances(databaseUrl: string) {
   return Number(rows[0]?.count ?? 0);
 }
 
+export async function isPostgresCatalogReady(databaseUrl: string) {
+  const sql = getClient(databaseUrl);
+  const rows = await sql<{ ready: boolean }[]>`
+    select
+      exists(select 1 from information_schema.tables where table_schema = 'public' and table_name = 'app_fragrances')
+      and exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_fragrances' and column_name = 'search_vector')
+      and exists(select 1 from information_schema.tables where table_schema = 'public' and table_name = 'fragrance_import_batches')
+    as ready
+  `;
+
+  return Boolean(rows[0]?.ready);
+}
+
 export async function getFragellaCacheSyncProgress(databaseUrl: string, note?: string): Promise<CatalogSyncProgress> {
   const sql = getClient(databaseUrl);
   await ensureSyncStateTable(sql);
@@ -383,6 +397,7 @@ export async function runFragellaCacheSyncStep(options: {
   apiKey: string;
   limit: number;
   maxDepth: number;
+  minIntervalSeconds: number;
 }): Promise<CatalogSyncProgress> {
   const sql = getClient(options.databaseUrl);
   await ensureSyncStateTable(sql);
@@ -428,6 +443,13 @@ export async function runFragellaCacheSyncStep(options: {
         },
         "Fragella cache sync completed.",
       );
+    }
+
+    if (options.minIntervalSeconds > 0) {
+      const nextAllowedAt = Date.parse(syncState.updated_at) + options.minIntervalSeconds * 1000;
+      if (Number.isFinite(nextAllowedAt) && Date.now() < nextAllowedAt) {
+        return buildSyncProgress(syncState, "Sync pacing is active to reduce Fragella API usage.");
+      }
     }
 
     const currentPrefix = queue.shift() ?? "";
@@ -495,6 +517,7 @@ export async function searchPostgresFragrances(
 ): Promise<FragranceSearchResponse> {
   const sql = getClient(databaseUrl);
   const query = params.query?.trim() ?? "";
+  const tsQuery = query.length > 0 ? query : null;
   const accords = params.accords ?? [];
 
   const rows = await sql<FragranceRow[]>`
@@ -528,7 +551,12 @@ export async function searchPostgresFragrances(
       description
     from app_fragrances
     where
-      (${query.length === 0} or search_vector @@ websearch_to_tsquery('english', ${query}) or name ilike ${`%${query}%`} or house ilike ${`%${query}%`})
+      (
+        ${tsQuery === null}
+        or (search_vector @@ websearch_to_tsquery('english', ${tsQuery}))
+        or name ilike ${`%${query}%`}
+        or house ilike ${`%${query}%`}
+      )
       and (${accords.length === 0} or accords && ${accords})
       and (${params.kind === "dupe" ? "Dupe" : ""} = '' or kind = 'Dupe')
       and (${params.kind === "original" ? "Original" : ""} = '' or kind = 'Original')
@@ -542,7 +570,7 @@ export async function searchPostgresFragrances(
         or lower(gender) = ${params.gender ?? "all"}
       )
     order by
-      case when ${query.length > 0} then ts_rank_cd(search_vector, websearch_to_tsquery('english', ${query})) else 0 end desc,
+      case when ${tsQuery !== null} then ts_rank_cd(search_vector, websearch_to_tsquery('english', ${tsQuery})) else 0 end desc,
       popularity_score desc nulls last,
       rating desc nulls last
   `;

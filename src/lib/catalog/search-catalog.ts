@@ -2,6 +2,7 @@ import { searchFragellaFragrances } from "@/lib/catalog/fragella-provider";
 import {
   countPostgresFragrances,
   getFragellaCacheSyncProgress,
+  isPostgresCatalogReady,
   runFragellaCacheSyncStep,
   searchPostgresFragrances,
   upsertFragrances,
@@ -21,6 +22,26 @@ function localFallback(params: FinderParams, message?: string): FragranceSearchR
 function parsePositiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function hasSearchIntent(params: FinderParams) {
+  return Boolean(
+    params.query?.trim() ||
+      (params.accords?.length ?? 0) > 0 ||
+      (params.mood && params.mood !== "any") ||
+      (params.occasion && params.occasion !== "any"),
+  );
+}
+
+function describeError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes(" 429") || message.includes("429")) {
+    return "Fragella API rate limit reached. Upgrade plan or reduce sync request frequency.";
+  }
+  if (message.includes(" 401") || message.includes("401")) {
+    return "Fragella API key is invalid or unauthorized.";
+  }
+  return message;
 }
 
 function syncNotice(sync?: CatalogSyncProgress) {
@@ -49,6 +70,8 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
   const staticExport = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
   const syncLimit = parsePositiveInt(process.env.FRAGELLA_SYNC_BATCH_LIMIT, 500);
   const syncMaxDepth = parsePositiveInt(process.env.FRAGELLA_SYNC_MAX_DEPTH, 3);
+  const syncMinIntervalSeconds = parsePositiveInt(process.env.FRAGELLA_SYNC_MIN_INTERVAL_SECONDS, 30);
+  const shouldRunSyncStep = !hasSearchIntent(params);
 
   if (staticExport) {
     return localFallback(params, "Static export mode is enabled, so live API/database search is unavailable.");
@@ -64,13 +87,45 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
 
   try {
     if (databaseUrl) {
+      const catalogReady = await isPostgresCatalogReady(databaseUrl);
+      if (!catalogReady) {
+        if (!fragellaApiKey) {
+          return localFallback(
+            params,
+            "PostgreSQL catalog tables are missing and FRAGELLA_API_KEY is unavailable. Run database/schema.sql in Neon.",
+          );
+        }
+
+        const fragellaResults = await searchFragellaFragrances(params, fragellaApiKey);
+
+        return {
+          ...fragellaResults,
+          sourceLabel: "Fragella API (database setup pending)",
+          dataNotice: "Run database/schema.sql in Neon to enable PostgreSQL cache and sync storage.",
+          sync: {
+            status: "disabled",
+            processedPrefixes: 0,
+            totalPrefixes: 0,
+            queueSize: 0,
+            latestBatchCount: fragellaResults.results.length,
+            note: "Database schema missing.",
+          },
+        };
+      }
+
       const syncProgress = fragellaApiKey
-        ? await runFragellaCacheSyncStep({
-            databaseUrl,
-            apiKey: fragellaApiKey,
-            limit: syncLimit,
-            maxDepth: syncMaxDepth,
-          })
+        ? shouldRunSyncStep
+          ? await runFragellaCacheSyncStep({
+              databaseUrl,
+              apiKey: fragellaApiKey,
+              limit: syncLimit,
+              maxDepth: syncMaxDepth,
+              minIntervalSeconds: syncMinIntervalSeconds,
+            })
+          : await getFragellaCacheSyncProgress(
+              databaseUrl,
+              "Sync runs during broad browsing. Refine filters without triggering extra sync requests.",
+            )
         : await getFragellaCacheSyncProgress(
             databaseUrl,
             "FRAGELLA_API_KEY is missing, so cache sync is paused. Existing cache results are still searchable.",
@@ -92,7 +147,11 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
       }
 
       const fragellaResults = await searchFragellaFragrances(params, fragellaApiKey);
-      await upsertFragrances(fragellaResults.results, databaseUrl);
+      try {
+        await upsertFragrances(fragellaResults.results, databaseUrl);
+      } catch (error) {
+        console.error(error);
+      }
       const warmedDatabaseSize = await countPostgresFragrances(databaseUrl);
 
       return {
@@ -113,8 +172,32 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
     }
   } catch (error) {
     console.error(error);
+    const rootError = describeError(error);
 
-    return localFallback(params, "Live catalog lookup failed, so the local starter catalog is being used.");
+    if (fragellaApiKey) {
+      try {
+        const fragellaResults = await searchFragellaFragrances(params, fragellaApiKey);
+
+        return {
+          ...fragellaResults,
+          sourceLabel: "Fragella API (Postgres unavailable)",
+          dataNotice: `PostgreSQL query failed (${rootError}); serving live Fragella results.`,
+          sync: {
+            status: "error",
+            processedPrefixes: 0,
+            totalPrefixes: 0,
+            queueSize: 0,
+            latestBatchCount: fragellaResults.results.length,
+            note: "PostgreSQL is unavailable or not initialized.",
+          },
+        };
+      } catch (fragellaError) {
+        console.error(fragellaError);
+        return localFallback(params, describeError(fragellaError));
+      }
+    }
+
+    return localFallback(params, `Live catalog lookup failed (${rootError}), so the local starter catalog is being used.`);
   }
 
   return searchFragrances(params);
