@@ -7,6 +7,11 @@
   --noise: radial-gradient(circle at 1px 1px, rgba(20, 33, 29, 0.08) 1px, transparent 0);
 }
 
+:root.dark {
+  color-scheme: dark;
+  --noise: radial-gradient(circle at 1px 1px, rgba(247, 241, 232, 0.08) 1px, transparent 0);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -23,6 +28,16 @@ body {
     var(--noise);
   background-size: auto, 18px 18px;
   font-family: "Avenir Next", "SF Pro Text", "Helvetica Neue", sans-serif;
+  transition: background 420ms ease, color 420ms ease;
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at 10% 10%, rgba(145, 169, 141, 0.22), transparent 28%),
+    radial-gradient(circle at 82% 14%, rgba(217, 200, 125, 0.15), transparent 24%),
+    linear-gradient(135deg, #101916, #1d2925 48%, #111816),
+    var(--noise);
+  background-size: auto, auto, auto, 18px 18px;
 }
 
 button,
@@ -43,6 +58,35 @@ textarea {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.18));
   box-shadow: 0 32px 90px rgba(20, 33, 29, 0.18);
   backdrop-filter: blur(28px) saturate(145%);
+}
+
+.dark .glass-panel,
+.dark .bg-white\/30,
+.dark .bg-white\/35,
+.dark .bg-white\/40,
+.dark .bg-white\/55,
+.dark .bg-white\/60,
+.dark .bg-white\/62,
+.dark .bg-white\/75,
+.dark .bg-white\/78 {
+  border-color: rgba(255, 255, 255, 0.14);
+  background-color: rgba(16, 25, 22, 0.48);
+}
+
+.dark .glass-panel {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+}
+
+.dark [class*="text-ink"] {
+  color: rgba(247, 241, 232, 0.88) !important;
+}
+
+.dark [class*="bg-milk"] {
+  background-color: rgba(247, 241, 232, 0.14) !important;
+}
+
+.dark [class*="border-white"] {
+  border-color: rgba(255, 255, 255, 0.16) !important;
 }
 
 .glass-panel::before {
@@ -71,4 +115,33 @@ textarea {
 
 .range-input {
   accent-color: #14211d;
+}
+
+.bubble-pop {
+  animation: bubble-pop 950ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes bubble-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) translateY(18px);
+  }
+  35% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.75) translateY(-56px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }

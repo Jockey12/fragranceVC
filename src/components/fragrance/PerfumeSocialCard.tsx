@@ -14,7 +14,7 @@ export default function PerfumeSocialCard({ fragrance }: Props) {
   const dayScore = 100 - nightScore;
 
   return (
-    <section className="overflow-hidden rounded-[2.2rem] border border-white/55 bg-[#e7f0df]/80 shadow-glass backdrop-blur-2xl">
+    <section className="overflow-hidden rounded-[2.2rem] border border-white/55 bg-[#e7f0df]/80 shadow-glass backdrop-blur-2xl transition duration-500 hover:-translate-y-1">
       <div className="grid gap-5 bg-gradient-to-r from-[#eff4e9] via-[#dceeea] to-[#edf5d2] p-5 sm:p-6 lg:grid-cols-[0.9fr_1.35fr]">
         <div className="grid content-between gap-5">
           <div>
@@ -36,7 +36,7 @@ export default function PerfumeSocialCard({ fragrance }: Props) {
               </div>
             </div>
 
-            <StaticBottle fragrance={fragrance} />
+            {fragrance.imageUrl ? <RealBottleImage fragrance={fragrance} /> : <NoBottleSummary fragrance={fragrance} />}
 
             <div className="mt-2 text-center">
               <p className="font-display text-4xl font-black tracking-[-0.06em]">{fragrance.rating.toFixed(1)}</p>
@@ -129,25 +129,31 @@ export default function PerfumeSocialCard({ fragrance }: Props) {
   );
 }
 
-function StaticBottle({ fragrance }: { fragrance: FragranceResult }) {
+function RealBottleImage({ fragrance }: { fragrance: FragranceResult }) {
   return (
     <div className="mt-6 grid place-items-center">
-      <div className="relative h-72 w-52">
-        <div className="absolute left-1/2 top-0 h-16 w-24 -translate-x-1/2 rounded-[1.4rem] bg-gradient-to-br from-[#f5d985] to-[#8f642a] shadow-glow" />
+      <div className="relative h-72 w-56">
         <div
-          className="absolute bottom-0 left-1/2 h-64 w-48 -translate-x-1/2 overflow-hidden rounded-[2rem] border border-white/45 shadow-glow"
-          style={{ background: `linear-gradient(145deg, ${fragrance.colorA}, ${fragrance.colorB})` }}
+          className="absolute inset-0 overflow-hidden rounded-[2rem] border border-white/45 bg-white/35 shadow-glow backdrop-blur-xl"
+          style={{ background: `radial-gradient(circle at 30% 20%, ${fragrance.colorA}, transparent 42%), rgba(255,255,255,0.42)` }}
         >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.72),transparent_24%),linear-gradient(145deg,rgba(255,255,255,0.24),rgba(0,0,0,0.12))]" />
-          {fragrance.imageUrl ? (
-            <img src={fragrance.imageUrl} alt="" className="absolute inset-0 h-full w-full object-contain p-5" />
-          ) : (
-            <div className="absolute inset-x-6 top-24 rounded-2xl border border-white/40 bg-white/22 p-4 text-center text-milk backdrop-blur-xl">
-              <p className="text-xs font-black uppercase tracking-[0.18em] opacity-70">{fragrance.house.slice(0, 18)}</p>
-              <p className="mt-1 font-display text-2xl font-black leading-none tracking-[-0.06em]">{fragrance.name.slice(0, 18)}</p>
-            </div>
-          )}
+          <img src={fragrance.imageUrl} alt={`${fragrance.name} bottle`} className="absolute inset-0 h-full w-full object-contain p-5" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function NoBottleSummary({ fragrance }: { fragrance: FragranceResult }) {
+  return (
+    <div className="mt-6 rounded-[1.5rem] border border-white/70 bg-white/55 p-5 shadow-sm">
+      <p className="text-sm font-black uppercase tracking-[0.2em] text-ink/42">No verified bottle image</p>
+      <p className="mt-3 text-base font-semibold leading-7 text-ink/65">
+        Showing fragrance information only. Real bottle images appear automatically when the API provides a licensed image URL.
+      </p>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <ProfilePill label="Match" value={`${fragrance.matchScore}/99`} />
+        <ProfilePill label="Accords" value={fragrance.accords.slice(0, 2).join(", ") || "Unknown"} />
       </div>
     </div>
   );

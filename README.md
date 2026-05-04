@@ -37,6 +37,22 @@ FRAGELLA_API_KEY=...
 
 There is no legal free API that reliably exposes “all perfumes.” The production-ready path is PostgreSQL/Supabase with a licensed catalog import such as FragDB, or a live API such as Fragella. Direct Fragrantica scraping is intentionally not included.
 
+When both `FRAGELLA_API_KEY` and `DATABASE_URL` are configured, live Fragella search results are cached into PostgreSQL automatically.
+
+## Deploy On Vercel
+
+Vercel is the recommended deployment target because this app uses a Next API route and optional secret API/database credentials.
+
+Set these environment variables in Vercel:
+
+```bash
+FRAGRANCE_DATA_SOURCE=fragella
+FRAGELLA_API_KEY=your_key
+DATABASE_URL=your_postgres_url
+```
+
+`DATABASE_URL` is optional, but needed if you want API results cached into the database.
+
 ## Pages
 
 - `/`: polished landing page.

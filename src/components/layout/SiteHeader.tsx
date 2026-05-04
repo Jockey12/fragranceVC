@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import ThemeToggle from "@/components/layout/ThemeToggle";
+
 export default function SiteHeader() {
   return (
     <header className="mx-auto flex w-full max-w-7xl animate-fade-up items-center justify-between rounded-full border border-white/45 bg-white/30 px-4 py-3 shadow-glass backdrop-blur-2xl">
@@ -20,6 +22,7 @@ export default function SiteHeader() {
         <Link className="hidden rounded-full px-3 py-2 transition hover:bg-white/65 sm:inline-flex sm:px-4" href="/how-built">
           How I Built This
         </Link>
+        <ThemeToggle />
       </nav>
     </header>
   );

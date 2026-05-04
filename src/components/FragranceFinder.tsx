@@ -5,6 +5,7 @@ import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "r
 import FragranceResultCard from "@/components/fragrance/FragranceResultCard";
 import PerfumeSocialCard from "@/components/fragrance/PerfumeSocialCard";
 import { accordSuggestions, moodSuggestions, occasionSuggestions } from "@/data/fragrances";
+import { searchFragrances } from "@/lib/fragrance-search";
 import type {
   FinderBudget,
   FinderGender,
@@ -16,6 +17,7 @@ import type {
 
 type Props = {
   initialData: FragranceSearchResponse;
+  apiEnabled?: boolean;
 };
 
 const sortOptions: { value: FinderSort; label: string }[] = [
@@ -79,7 +81,7 @@ const quickBriefs = [
   },
 ];
 
-export default function FragranceFinder({ initialData }: Props) {
+export default function FragranceFinder({ initialData, apiEnabled = true }: Props) {
   const [query, setQuery] = useState("");
   const [selectedAccords, setSelectedAccords] = useState<string[]>([]);
   const [mood, setMood] = useState("any");
@@ -90,6 +92,7 @@ export default function FragranceFinder({ initialData }: Props) {
   const [sort, setSort] = useState<FinderSort>("match");
   const [data, setData] = useState(initialData);
   const [selected, setSelected] = useState<FragranceResult | undefined>(initialData.results[0]);
+  const [bubbleBurst, setBubbleBurst] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
@@ -121,6 +124,32 @@ export default function FragranceFinder({ initialData }: Props) {
     params.set("sort", sort);
 
     setIsLoading(true);
+
+    if (!apiEnabled) {
+      const nextData = searchFragrances({
+        query: deferredQuery,
+        accords: selectedAccords,
+        mood,
+        occasion,
+        budget,
+        gender,
+        kind,
+        sort,
+      });
+
+      setData({
+        ...nextData,
+        sourceLabel: "Static catalog",
+        dataNotice: "GitHub Pages is static, so this selector uses the bundled catalog. Use Vercel/Netlify for live API search.",
+      });
+      setSelected((current) => {
+        if (!nextData.results.length) return undefined;
+        return nextData.results.find((fragrance) => fragrance.id === current?.id) ?? nextData.results[0];
+      });
+      setIsLoading(false);
+
+      return () => controller.abort();
+    }
 
     fetch(`/api/fragrances?${params.toString()}`, { signal: controller.signal })
       .then((response) => {
@@ -178,8 +207,14 @@ export default function FragranceFinder({ initialData }: Props) {
     });
   }
 
+  function selectFragrance(fragrance: FragranceResult) {
+    setSelected(fragrance);
+    setBubbleBurst((current) => current + 1);
+  }
+
   return (
     <div className="glass-panel animate-fade-up rounded-[2.5rem] p-4 [animation-delay:220ms] sm:p-6 lg:p-7">
+      <BubbleBurst key={bubbleBurst} active={bubbleBurst > 0} fragrance={selected} />
       <div className="relative z-10 grid gap-5">
         <div className="grid gap-4 rounded-[2rem] border border-white/50 bg-white/30 p-4 backdrop-blur-2xl">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -352,7 +387,7 @@ export default function FragranceFinder({ initialData }: Props) {
                 fragrance={fragrance}
                 index={index}
                 selected={selected?.id === fragrance.id}
-                onSelect={setSelected}
+                onSelect={selectFragrance}
               />
             ))
           ) : (
@@ -365,6 +400,29 @@ export default function FragranceFinder({ initialData }: Props) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function BubbleBurst({ active, fragrance }: { active: boolean; fragrance?: FragranceResult }) {
+  if (!active || !fragrance) return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-[2.5rem]">
+      {Array.from({ length: 14 }, (_, index) => (
+        <span
+          key={`${fragrance.id}-${index}`}
+          className="bubble-pop absolute rounded-full border border-white/45 bg-white/35 shadow-glow backdrop-blur-xl"
+          style={{
+            left: `${12 + ((index * 19) % 74)}%`,
+            top: `${18 + ((index * 31) % 58)}%`,
+            width: `${1.2 + (index % 5) * 0.55}rem`,
+            height: `${1.2 + (index % 5) * 0.55}rem`,
+            background: `linear-gradient(145deg, ${fragrance.colorA}80, ${fragrance.colorB}55)`,
+            animationDelay: `${index * 42}ms`,
+          }}
+        />
+      ))}
     </div>
   );
 }

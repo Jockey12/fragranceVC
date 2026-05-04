@@ -18,7 +18,7 @@ const currency = new Intl.NumberFormat("en-US", {
 export default function FragranceResultCard({ fragrance, index, selected, onSelect }: Props) {
   return (
     <article
-      className={`animate-fade-up rounded-[2rem] border p-2 shadow-glass backdrop-blur-2xl transition ${
+      className={`animate-fade-up rounded-[2rem] border p-2 shadow-glass backdrop-blur-2xl transition duration-300 hover:-translate-y-1 ${
         selected ? "border-ink/55 bg-white/62" : "border-white/50 bg-white/35 hover:bg-white/50"
       }`}
       style={{ animationDelay: `${Math.min(index * 70, 420)}ms` }}
@@ -63,7 +63,7 @@ export default function FragranceResultCard({ fragrance, index, selected, onSele
             </div>
           </div>
 
-          <p className="line-clamp-2 text-sm font-semibold leading-6 text-ink/62">{fragrance.description}</p>
+                <p className="line-clamp-2 text-sm font-semibold leading-6 text-ink/62">{fragrance.description}</p>
 
           <div className="grid gap-2 md:grid-cols-3">
             <Metric label="Price" value={fragrance.price > 0 ? currency.format(fragrance.price) : "Market"} />

@@ -85,6 +85,163 @@ function mapRow(row: FragranceRow): Fragrance {
   };
 }
 
+function toDbFragrance(fragrance: Fragrance) {
+  return {
+    id: fragrance.id,
+    name: fragrance.name,
+    house: fragrance.house,
+    kind: fragrance.kind,
+    dupe_for: fragrance.dupeFor ?? null,
+    year: fragrance.year ?? null,
+    image_url: fragrance.imageUrl ?? null,
+    country: fragrance.country ?? null,
+    price_usd: fragrance.price || null,
+    price_band: fragrance.priceBand,
+    popularity_score: fragrance.popularity,
+    rating: fragrance.rating || null,
+    rating_votes: fragrance.votes ?? null,
+    concentration: fragrance.concentration,
+    gender: fragrance.gender,
+    top_notes: fragrance.topNotes,
+    heart_notes: fragrance.heartNotes,
+    base_notes: fragrance.baseNotes,
+    accords: fragrance.accords,
+    moods: fragrance.moods,
+    occasions: fragrance.occasions,
+    seasons: fragrance.seasons,
+    projection: fragrance.projection,
+    longevity_hours: fragrance.longevityHours,
+    color_a: fragrance.colorA,
+    color_b: fragrance.colorB,
+    description: fragrance.description,
+    raw: JSON.stringify({
+      provider: "fragella",
+      imageUrl: fragrance.imageUrl,
+      importedAt: new Date().toISOString(),
+    }),
+  };
+}
+
+export async function upsertFragrances(fragrances: Fragrance[], databaseUrl: string) {
+  if (!fragrances.length) return 0;
+
+  const sql = getClient(databaseUrl);
+
+  await sql.begin(async (transaction) => {
+    for (const fragrance of fragrances) {
+      const row = toDbFragrance(fragrance);
+
+      await transaction`
+        insert into app_fragrances (
+          id,
+          name,
+          house,
+          kind,
+          dupe_for,
+          year,
+          image_url,
+          country,
+          price_usd,
+          price_band,
+          popularity_score,
+          rating,
+          rating_votes,
+          concentration,
+          gender,
+          top_notes,
+          heart_notes,
+          base_notes,
+          accords,
+          moods,
+          occasions,
+          seasons,
+          projection,
+          longevity_hours,
+          color_a,
+          color_b,
+          description,
+          raw,
+          updated_at
+        )
+        values (
+          ${row.id},
+          ${row.name},
+          ${row.house},
+          ${row.kind},
+          ${row.dupe_for},
+          ${row.year},
+          ${row.image_url},
+          ${row.country},
+          ${row.price_usd},
+          ${row.price_band},
+          ${row.popularity_score},
+          ${row.rating},
+          ${row.rating_votes},
+          ${row.concentration},
+          ${row.gender},
+          ${row.top_notes},
+          ${row.heart_notes},
+          ${row.base_notes},
+          ${row.accords},
+          ${row.moods},
+          ${row.occasions},
+          ${row.seasons},
+          ${row.projection},
+          ${row.longevity_hours},
+          ${row.color_a},
+          ${row.color_b},
+          ${row.description},
+          ${row.raw}::jsonb,
+          now()
+        )
+        on conflict (id) do update set
+          name = excluded.name,
+          house = excluded.house,
+          kind = excluded.kind,
+          dupe_for = excluded.dupe_for,
+          year = excluded.year,
+          image_url = excluded.image_url,
+          country = excluded.country,
+          price_usd = excluded.price_usd,
+          price_band = excluded.price_band,
+          popularity_score = excluded.popularity_score,
+          rating = excluded.rating,
+          rating_votes = excluded.rating_votes,
+          concentration = excluded.concentration,
+          gender = excluded.gender,
+          top_notes = excluded.top_notes,
+          heart_notes = excluded.heart_notes,
+          base_notes = excluded.base_notes,
+          accords = excluded.accords,
+          moods = excluded.moods,
+          occasions = excluded.occasions,
+          seasons = excluded.seasons,
+          projection = excluded.projection,
+          longevity_hours = excluded.longevity_hours,
+          color_a = excluded.color_a,
+          color_b = excluded.color_b,
+          description = excluded.description,
+          raw = app_fragrances.raw || excluded.raw,
+          updated_at = now()
+      `;
+    }
+  });
+
+  await sql`
+    insert into fragrance_import_batches (source, source_version, row_count, metadata)
+    values ('fragella-api', 'search-cache', ${fragrances.length}, ${JSON.stringify({ mode: "upsert" })}::jsonb)
+  `;
+
+  return fragrances.length;
+}
+
+export async function countPostgresFragrances(databaseUrl: string) {
+  const sql = getClient(databaseUrl);
+  const rows = await sql<{ count: string }[]>`select count(*)::text as count from app_fragrances`;
+
+  return Number(rows[0]?.count ?? 0);
+}
+
 export async function searchPostgresFragrances(
   params: FinderParams,
   databaseUrl: string,

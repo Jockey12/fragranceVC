@@ -4,6 +4,7 @@ import { searchCatalog } from "@/lib/catalog/search-catalog";
 
 export default async function SelectorPage() {
   const initialResults = await searchCatalog({ sort: "popularity" });
+  const apiEnabled = process.env.NEXT_PUBLIC_STATIC_EXPORT !== "true";
 
   return (
     <main className="relative min-h-screen overflow-hidden px-4 py-6 text-ink sm:px-6 lg:px-8">
@@ -24,7 +25,7 @@ export default async function SelectorPage() {
               Choose a scent by vibe, notes, price, or popularity.
             </h1>
           </div>
-          <FragranceFinder initialData={initialResults} />
+          <FragranceFinder initialData={initialResults} apiEnabled={apiEnabled} />
         </section>
       </div>
     </main>
