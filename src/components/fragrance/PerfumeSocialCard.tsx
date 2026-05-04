@@ -1,6 +1,5 @@
 "use client";
 
-import RotatableBottle from "@/components/fragrance/RotatableBottle";
 import type { FragranceResult } from "@/lib/fragrance-search";
 
 type Props = {
@@ -37,7 +36,7 @@ export default function PerfumeSocialCard({ fragrance }: Props) {
               </div>
             </div>
 
-            <RotatableBottle fragrance={fragrance} />
+            <StaticBottle fragrance={fragrance} />
 
             <div className="mt-2 text-center">
               <p className="font-display text-4xl font-black tracking-[-0.06em]">{fragrance.rating.toFixed(1)}</p>
@@ -127,6 +126,30 @@ export default function PerfumeSocialCard({ fragrance }: Props) {
         </div>
       </div>
     </section>
+  );
+}
+
+function StaticBottle({ fragrance }: { fragrance: FragranceResult }) {
+  return (
+    <div className="mt-6 grid place-items-center">
+      <div className="relative h-72 w-52">
+        <div className="absolute left-1/2 top-0 h-16 w-24 -translate-x-1/2 rounded-[1.4rem] bg-gradient-to-br from-[#f5d985] to-[#8f642a] shadow-glow" />
+        <div
+          className="absolute bottom-0 left-1/2 h-64 w-48 -translate-x-1/2 overflow-hidden rounded-[2rem] border border-white/45 shadow-glow"
+          style={{ background: `linear-gradient(145deg, ${fragrance.colorA}, ${fragrance.colorB})` }}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.72),transparent_24%),linear-gradient(145deg,rgba(255,255,255,0.24),rgba(0,0,0,0.12))]" />
+          {fragrance.imageUrl ? (
+            <img src={fragrance.imageUrl} alt="" className="absolute inset-0 h-full w-full object-contain p-5" />
+          ) : (
+            <div className="absolute inset-x-6 top-24 rounded-2xl border border-white/40 bg-white/22 p-4 text-center text-milk backdrop-blur-xl">
+              <p className="text-xs font-black uppercase tracking-[0.18em] opacity-70">{fragrance.house.slice(0, 18)}</p>
+              <p className="mt-1 font-display text-2xl font-black leading-none tracking-[-0.06em]">{fragrance.name.slice(0, 18)}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

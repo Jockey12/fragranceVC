@@ -1,6 +1,6 @@
 # FragranceVC
 
-A modern Next.js + Tailwind perfume finder. Users describe how they want to smell, filter by notes, mood, occasion, gender direction, price, and dupe/original status, then select a perfume to view a Fragrantica-style profile card with a draggable 3D bottle.
+A modern Next.js + Tailwind perfume finder. Users describe how they want to smell, filter by notes, mood, occasion, gender direction, price, and dupe/original status, then select a perfume to view a Fragrantica-style profile card.
 
 ## Run Locally
 
@@ -16,7 +16,7 @@ Open `http://localhost:3000`.
 The app supports three data modes:
 
 - `local`: built-in starter catalog for development.
-- `fragella`: live API search when `FRAGELLA_API_KEY` is set.
+- `fragella`: live API search across a large fragrance API when `FRAGELLA_API_KEY` is set.
 - `postgres`: full imported catalog when `DATABASE_URL` points to the schema in `database/schema.sql`.
 
 Copy `.env.example` to `.env.local` and choose a source:
@@ -36,6 +36,12 @@ FRAGELLA_API_KEY=...
 ## Full Perfume Database
 
 There is no legal free API that reliably exposes “all perfumes.” The production-ready path is PostgreSQL/Supabase with a licensed catalog import such as FragDB, or a live API such as Fragella. Direct Fragrantica scraping is intentionally not included.
+
+## Pages
+
+- `/`: polished landing page.
+- `/selector`: fragrance selector and profile cards.
+- `/how-built`: prompt history and build notes.
 
 ## Checks
 
