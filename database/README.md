@@ -11,7 +11,8 @@ An “all perfumes” catalog is relational and search-heavy: fragrances, brands
 1. Create a PostgreSQL database.
 2. Run `database/schema.sql`.
 3. Import licensed fragrance data into `app_fragrances`.
-4. Set `DATABASE_URL` and optionally `FRAGRANCE_DATA_SOURCE=postgres`.
+4. Set `DATABASE_URL` and `FRAGELLA_API_KEY` to enable incremental cache sync from Fragella.
+5. Optional tuning: `FRAGELLA_SYNC_BATCH_LIMIT` and `FRAGELLA_SYNC_MAX_DEPTH`.
 
 ## Data Sources
 

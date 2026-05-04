@@ -81,6 +81,8 @@ const quickBriefs = [
   },
 ];
 
+const RESULTS_BATCH_SIZE = 24;
+
 export default function FragranceFinder({ initialData, apiEnabled = true }: Props) {
   const [query, setQuery] = useState("");
   const [selectedAccords, setSelectedAccords] = useState<string[]>([]);
@@ -92,6 +94,8 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
   const [sort, setSort] = useState<FinderSort>("match");
   const [data, setData] = useState(initialData);
   const [selected, setSelected] = useState<FragranceResult | undefined>(initialData.results[0]);
+  const [visibleCount, setVisibleCount] = useState(RESULTS_BATCH_SIZE);
+  const [syncTick, setSyncTick] = useState(0);
   const [bubbleBurst, setBubbleBurst] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -174,7 +178,18 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
       .finally(() => setIsLoading(false));
 
     return () => controller.abort();
+  }, [budget, deferredQuery, gender, kind, mood, occasion, selectedAccords, sort, syncTick]);
+
+  useEffect(() => {
+    setVisibleCount(RESULTS_BATCH_SIZE);
   }, [budget, deferredQuery, gender, kind, mood, occasion, selectedAccords, sort]);
+
+  useEffect(() => {
+    if (!apiEnabled || data.sync?.status !== "syncing") return;
+
+    const timer = window.setTimeout(() => setSyncTick((current) => current + 1), 2500);
+    return () => window.clearTimeout(timer);
+  }, [apiEnabled, data.sync?.processedPrefixes, data.sync?.status, data.sync?.totalPrefixes]);
 
   function toggleAccord(accord: string) {
     startTransition(() => {
@@ -327,6 +342,14 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
               </div>
 
               {data.dataNotice ? <p className="mb-4 text-sm font-semibold leading-6 text-ink/55">{data.dataNotice}</p> : null}
+              {data.sync ? (
+                <p className="mb-4 rounded-xl border border-white/45 bg-white/45 px-3 py-2 text-xs font-black uppercase tracking-[0.15em] text-ink/55">
+                  Sync {data.sync.status}
+                  {data.sync.status === "syncing"
+                    ? ` · ${data.sync.processedPrefixes}/${data.sync.totalPrefixes}`
+                    : ""}
+                </p>
+              ) : null}
 
               <div className="grid gap-3 sm:grid-cols-3">
                 {kindOptions.map((item) => (
@@ -381,15 +404,29 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
 
         <div className="grid gap-4">
           {data.results.length > 0 ? (
-            data.results.slice(0, 16).map((fragrance, index) => (
-              <FragranceResultCard
-                key={fragrance.id}
-                fragrance={fragrance}
-                index={index}
-                selected={selected?.id === fragrance.id}
-                onSelect={selectFragrance}
-              />
-            ))
+            <>
+              {data.results.slice(0, visibleCount).map((fragrance, index) => (
+                <FragranceResultCard
+                  key={fragrance.id}
+                  fragrance={fragrance}
+                  index={index}
+                  selected={selected?.id === fragrance.id}
+                  onSelect={selectFragrance}
+                />
+              ))}
+
+              {visibleCount < data.results.length ? (
+                <button
+                  className="rounded-[1.5rem] border border-white/50 bg-white/35 px-4 py-3 text-sm font-black text-ink/70 backdrop-blur-2xl transition hover:bg-white/55"
+                  type="button"
+                  onClick={() =>
+                    setVisibleCount((current) => Math.min(current + RESULTS_BATCH_SIZE, data.results.length))
+                  }
+                >
+                  Show more fragrances ({data.results.length - visibleCount} remaining)
+                </button>
+              ) : null}
+            </>
           ) : (
             <div className="rounded-[2rem] border border-white/50 bg-white/35 p-8 text-center backdrop-blur-2xl">
               <p className="font-display text-2xl font-black tracking-[-0.04em]">No exact matches yet.</p>

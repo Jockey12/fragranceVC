@@ -23,7 +23,7 @@ const prompts = [
 const buildNotes = [
   "Next.js App Router provides separate pages for the landing page, fragrance selector, and build notes.",
   "Tailwind CSS handles the iOS-glass visual system with translucent panels, soft gradients, and rounded controls.",
-  "The fragrance API layer prefers Fragella when `FRAGELLA_API_KEY` is configured, then PostgreSQL when `DATABASE_URL` is configured, and falls back to the local starter catalog for development.",
+  "The fragrance API layer prefers PostgreSQL full-catalog search when `DATABASE_URL` is configured, otherwise uses Fragella live API when `FRAGELLA_API_KEY` is configured, and falls back to the local starter catalog for development.",
   "Fragrantica scraping is not implemented because its current terms prohibit unauthorized automated access and unofficial API usage.",
 ];
 

@@ -47,8 +47,8 @@ export default function Home() {
             <div className="mt-8 grid grid-cols-3 gap-3 max-sm:grid-cols-1">
               {[
                 [String(initialResults.databaseSize), "starter scents"],
-                ["74k+", "API-ready catalog"],
-                ["128k+", "database import path"],
+                ["Live API", "catalog ready"],
+                ["PostgreSQL", "full import path"],
               ].map(([value, label]) => (
                 <div
                   key={label}

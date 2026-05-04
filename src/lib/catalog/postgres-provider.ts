@@ -1,7 +1,13 @@
 import postgres from "postgres";
 
 import type { Fragrance } from "@/data/fragrances";
-import { searchFragranceList, type FinderParams, type FragranceSearchResponse } from "@/lib/fragrance-search";
+import { fetchFragellaCatalogBatch } from "@/lib/catalog/fragella-provider";
+import {
+  searchFragranceList,
+  type CatalogSyncProgress,
+  type FinderParams,
+  type FragranceSearchResponse,
+} from "@/lib/fragrance-search";
 
 type FragranceRow = {
   id: string;
@@ -33,6 +39,18 @@ type FragranceRow = {
   description: string | null;
 };
 
+type SyncStateRow = {
+  status: "syncing" | "complete";
+  queue: string[];
+  processed_prefixes: number;
+  total_prefixes: number;
+  last_prefix: string | null;
+  latest_batch_count: number;
+};
+
+const FRAGELLA_SYNC_LOCK_KEY = 782331;
+const DEFAULT_SYNC_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789".split("");
+
 let client: ReturnType<typeof postgres> | null = null;
 
 function getClient(databaseUrl: string) {
@@ -42,6 +60,50 @@ function getClient(databaseUrl: string) {
   });
 
   return client;
+}
+
+async function ensureSyncStateTable(sql: ReturnType<typeof postgres>) {
+  await sql`
+    create table if not exists fragrance_cache_sync_state (
+      id integer primary key default 1,
+      status text not null default 'syncing' check (status in ('syncing', 'complete')),
+      queue text[] not null default '{}',
+      processed_prefixes integer not null default 0,
+      total_prefixes integer not null default 0,
+      last_prefix text,
+      latest_batch_count integer not null default 0,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `;
+
+  await sql`
+    insert into fragrance_cache_sync_state (id, status, queue, processed_prefixes, total_prefixes)
+    values (1, 'syncing', ${DEFAULT_SYNC_CHARS}, 0, ${DEFAULT_SYNC_CHARS.length})
+    on conflict (id) do nothing
+  `;
+}
+
+async function readSyncState(sql: ReturnType<typeof postgres>) {
+  const rows = await sql<SyncStateRow[]>`
+    select status, queue, processed_prefixes, total_prefixes, last_prefix, latest_batch_count
+    from fragrance_cache_sync_state
+    where id = 1
+  `;
+
+  return rows[0];
+}
+
+function buildSyncProgress(syncState: SyncStateRow, note?: string): CatalogSyncProgress {
+  return {
+    status: syncState.status,
+    processedPrefixes: syncState.processed_prefixes,
+    totalPrefixes: syncState.total_prefixes,
+    queueSize: syncState.queue.length,
+    latestBatchCount: syncState.latest_batch_count,
+    lastPrefix: syncState.last_prefix ?? undefined,
+    note,
+  };
 }
 
 function priceBand(price: number): Fragrance["priceBand"] {
@@ -161,6 +223,7 @@ export async function upsertFragrances(fragrances: Fragrance[], databaseUrl: str
           color_b,
           description,
           raw,
+          search_vector,
           updated_at
         )
         values (
@@ -192,6 +255,26 @@ export async function upsertFragrances(fragrances: Fragrance[], databaseUrl: str
           ${row.color_b},
           ${row.description},
           ${row.raw}::jsonb,
+          (
+            setweight(to_tsvector('english', unaccent(${row.name})), 'A') ||
+            setweight(to_tsvector('english', unaccent(${row.house})), 'A') ||
+            setweight(to_tsvector('english', unaccent(${row.description ?? ""})), 'B') ||
+            setweight(to_tsvector('english', unaccent(${(row.accords ?? []).join(" ")})), 'B') ||
+            setweight(
+              to_tsvector(
+                'english',
+                unaccent(${[...(row.top_notes ?? []), ...(row.heart_notes ?? []), ...(row.base_notes ?? [])].join(" ")}),
+              ),
+              'C'
+            ) ||
+            setweight(
+              to_tsvector(
+                'english',
+                unaccent(${[...(row.moods ?? []), ...(row.occasions ?? []), ...(row.seasons ?? [])].join(" ")}),
+              ),
+              'D'
+            )
+          ),
           now()
         )
         on conflict (id) do update set
@@ -222,6 +305,40 @@ export async function upsertFragrances(fragrances: Fragrance[], databaseUrl: str
           color_b = excluded.color_b,
           description = excluded.description,
           raw = app_fragrances.raw || excluded.raw,
+          search_vector = (
+            setweight(to_tsvector('english', unaccent(coalesce(excluded.name, ''))), 'A') ||
+            setweight(to_tsvector('english', unaccent(coalesce(excluded.house, ''))), 'A') ||
+            setweight(to_tsvector('english', unaccent(coalesce(excluded.description, ''))), 'B') ||
+            setweight(to_tsvector('english', unaccent(array_to_string(coalesce(excluded.accords, '{}'::text[]), ' '))), 'B') ||
+            setweight(
+              to_tsvector(
+                'english',
+                unaccent(
+                  array_to_string(
+                    coalesce(excluded.top_notes, '{}'::text[]) ||
+                    coalesce(excluded.heart_notes, '{}'::text[]) ||
+                    coalesce(excluded.base_notes, '{}'::text[]),
+                    ' '
+                  )
+                )
+              ),
+              'C'
+            ) ||
+            setweight(
+              to_tsvector(
+                'english',
+                unaccent(
+                  array_to_string(
+                    coalesce(excluded.moods, '{}'::text[]) ||
+                    coalesce(excluded.occasions, '{}'::text[]) ||
+                    coalesce(excluded.seasons, '{}'::text[]),
+                    ' '
+                  )
+                )
+              ),
+              'D'
+            )
+          ),
           updated_at = now()
       `;
     }
@@ -242,6 +359,136 @@ export async function countPostgresFragrances(databaseUrl: string) {
   return Number(rows[0]?.count ?? 0);
 }
 
+export async function getFragellaCacheSyncProgress(databaseUrl: string, note?: string): Promise<CatalogSyncProgress> {
+  const sql = getClient(databaseUrl);
+  await ensureSyncStateTable(sql);
+  const syncState = await readSyncState(sql);
+
+  if (!syncState) {
+    return {
+      status: "error",
+      processedPrefixes: 0,
+      totalPrefixes: 0,
+      queueSize: 0,
+      latestBatchCount: 0,
+      note: note ?? "Cache sync state is unavailable.",
+    };
+  }
+
+  return buildSyncProgress(syncState, note);
+}
+
+export async function runFragellaCacheSyncStep(options: {
+  databaseUrl: string;
+  apiKey: string;
+  limit: number;
+  maxDepth: number;
+}): Promise<CatalogSyncProgress> {
+  const sql = getClient(options.databaseUrl);
+  await ensureSyncStateTable(sql);
+
+  const lockRows = await sql<{ locked: boolean }[]>`
+    select pg_try_advisory_lock(${FRAGELLA_SYNC_LOCK_KEY}) as locked
+  `;
+
+  if (!lockRows[0]?.locked) {
+    return getFragellaCacheSyncProgress(options.databaseUrl, "Cache sync is busy; continuing on the next refresh.");
+  }
+
+  try {
+    const syncState = await readSyncState(sql);
+
+    if (!syncState) {
+      return {
+        status: "error",
+        processedPrefixes: 0,
+        totalPrefixes: 0,
+        queueSize: 0,
+        latestBatchCount: 0,
+        note: "Cache sync state could not be initialized.",
+      };
+    }
+
+    const queue = [...(syncState.queue ?? [])];
+
+    if (!queue.length) {
+      await sql`
+        update fragrance_cache_sync_state
+        set status = 'complete', updated_at = now()
+        where id = 1
+      `;
+
+      const completeState = await readSyncState(sql);
+
+      return buildSyncProgress(
+        completeState ?? {
+          ...syncState,
+          status: "complete",
+          queue: [],
+        },
+        "Fragella cache sync completed.",
+      );
+    }
+
+    const currentPrefix = queue.shift() ?? "";
+    const batch = await fetchFragellaCatalogBatch({
+      apiKey: options.apiKey,
+      search: currentPrefix,
+      limit: options.limit,
+    });
+
+    await upsertFragrances(batch, options.databaseUrl);
+
+    const isSaturated = batch.length >= options.limit;
+    const canExpand = currentPrefix.length < options.maxDepth;
+    const expandedPrefixes = isSaturated && canExpand ? DEFAULT_SYNC_CHARS.map((token) => `${currentPrefix}${token}`) : [];
+    const nextQueue = expandedPrefixes.length ? [...expandedPrefixes, ...queue] : queue;
+
+    await sql`
+      update fragrance_cache_sync_state
+      set
+        status = ${nextQueue.length > 0 ? "syncing" : "complete"},
+        queue = ${nextQueue},
+        processed_prefixes = processed_prefixes + 1,
+        total_prefixes = total_prefixes + ${expandedPrefixes.length},
+        last_prefix = ${currentPrefix},
+        latest_batch_count = ${batch.length},
+        updated_at = now()
+      where id = 1
+    `;
+
+    const nextState = await readSyncState(sql);
+
+    return buildSyncProgress(
+      nextState ?? {
+        ...syncState,
+        queue: nextQueue,
+        processed_prefixes: syncState.processed_prefixes + 1,
+        total_prefixes: syncState.total_prefixes + expandedPrefixes.length,
+        last_prefix: currentPrefix,
+        latest_batch_count: batch.length,
+        status: nextQueue.length > 0 ? "syncing" : "complete",
+      },
+      nextQueue.length > 0
+        ? `Caching catalog prefixes (${(nextState ?? syncState).processed_prefixes}/${(nextState ?? syncState).total_prefixes}).`
+        : "Fragella cache sync completed.",
+    );
+  } catch (error) {
+    console.error(error);
+
+    return {
+      status: "error",
+      processedPrefixes: 0,
+      totalPrefixes: 0,
+      queueSize: 0,
+      latestBatchCount: 0,
+      note: "Cache sync step failed.",
+    };
+  } finally {
+    await sql`select pg_advisory_unlock(${FRAGELLA_SYNC_LOCK_KEY})`;
+  }
+}
+
 export async function searchPostgresFragrances(
   params: FinderParams,
   databaseUrl: string,
@@ -249,7 +496,6 @@ export async function searchPostgresFragrances(
   const sql = getClient(databaseUrl);
   const query = params.query?.trim() ?? "";
   const accords = params.accords ?? [];
-  const limit = 60;
 
   const rows = await sql<FragranceRow[]>`
     select
@@ -299,7 +545,6 @@ export async function searchPostgresFragrances(
       case when ${query.length > 0} then ts_rank_cd(search_vector, websearch_to_tsquery('english', ${query})) else 0 end desc,
       popularity_score desc nulls last,
       rating desc nulls last
-    limit ${limit}
   `;
 
   return searchFragranceList(rows.map(mapRow), params, {

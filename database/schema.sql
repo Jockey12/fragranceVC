@@ -45,14 +45,7 @@ create table if not exists app_fragrances (
   color_b text default '#243e39',
   description text,
   raw jsonb not null default '{}'::jsonb,
-  search_vector tsvector generated always as (
-    setweight(to_tsvector('english', unaccent(coalesce(name, ''))), 'A') ||
-    setweight(to_tsvector('english', unaccent(coalesce(house, ''))), 'A') ||
-    setweight(to_tsvector('english', unaccent(coalesce(description, ''))), 'B') ||
-    setweight(to_tsvector('english', unaccent(array_to_string(accords, ' '))), 'B') ||
-    setweight(to_tsvector('english', unaccent(array_to_string(top_notes || heart_notes || base_notes, ' '))), 'C') ||
-    setweight(to_tsvector('english', unaccent(array_to_string(moods || occasions || seasons, ' '))), 'D')
-  ) stored,
+  search_vector tsvector not null default ''::tsvector,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -74,6 +67,18 @@ create table if not exists fragrance_import_batches (
   row_count integer not null default 0,
   imported_at timestamptz not null default now(),
   metadata jsonb not null default '{}'::jsonb
+);
+
+create table if not exists fragrance_cache_sync_state (
+  id integer primary key default 1,
+  status text not null default 'syncing' check (status in ('syncing', 'complete')),
+  queue text[] not null default '{}',
+  processed_prefixes integer not null default 0,
+  total_prefixes integer not null default 0,
+  last_prefix text,
+  latest_batch_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists app_fragrances_search_idx on app_fragrances using gin (search_vector);

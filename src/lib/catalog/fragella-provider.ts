@@ -155,26 +155,46 @@ async function requestFragella(path: string, params: URLSearchParams, apiKey: st
   return response.json() as Promise<FragellaFragrance[]>;
 }
 
+export async function fetchFragellaCatalogBatch(options: {
+  apiKey: string;
+  search?: string;
+  limit: number;
+}): Promise<Fragrance[]> {
+  const requestParams = new URLSearchParams();
+  const query = options.search?.trim();
+
+  if (query) requestParams.set("search", query);
+  requestParams.set("limit", String(options.limit));
+
+  const payload = await requestFragella("fragrances", requestParams, options.apiKey);
+
+  return payload.map(mapFragellaFragrance);
+}
+
 export async function searchFragellaFragrances(
   params: FinderParams,
   apiKey: string,
 ): Promise<FragranceSearchResponse> {
   const query = params.query?.trim() ?? "";
   const requestParams = new URLSearchParams();
-
-  let payload: FragellaFragrance[];
+  const matchLimit = 500;
+  const focusedSearchLimit = 500;
+  const defaultSeedSearch = (process.env.FRAGELLA_DEFAULT_SEARCH ?? "a").trim() || "a";
+  let catalog: Fragrance[];
 
   if (params.accords?.length && query.length < 3) {
     requestParams.set("accords", params.accords.map((accord) => `${accord}:50`).join(","));
-    requestParams.set("limit", "10");
-    payload = await requestFragella("fragrances/match", requestParams, apiKey);
+    requestParams.set("limit", String(matchLimit));
+    const payload = await requestFragella("fragrances/match", requestParams, apiKey);
+    catalog = payload.map(mapFragellaFragrance);
   } else {
-    requestParams.set("search", query.length >= 3 ? query : params.accords?.[0] ?? "vanilla");
-    requestParams.set("limit", "20");
-    payload = await requestFragella("fragrances", requestParams, apiKey);
+    const searchTerm = query || params.accords?.[0] || defaultSeedSearch;
+    catalog = await fetchFragellaCatalogBatch({
+      apiKey,
+      search: searchTerm,
+      limit: focusedSearchLimit,
+    });
   }
-
-  const catalog = payload.map(mapFragellaFragrance);
 
   return searchFragranceList(catalog, params, {
     source: "fragella",

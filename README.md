@@ -31,13 +31,21 @@ or:
 ```bash
 FRAGRANCE_DATA_SOURCE=fragella
 FRAGELLA_API_KEY=...
+FRAGELLA_DEFAULT_SEARCH=a
 ```
 
 ## Full Perfume Database
 
 There is no legal free API that reliably exposes “all perfumes.” The production-ready path is PostgreSQL/Supabase with a licensed catalog import such as FragDB, or a live API such as Fragella. Direct Fragrantica scraping is intentionally not included.
 
-When both `FRAGELLA_API_KEY` and `DATABASE_URL` are configured, live Fragella search results are cached into PostgreSQL automatically.
+When both `FRAGELLA_API_KEY` and `DATABASE_URL` are configured, the selector uses PostgreSQL as the source of truth and performs incremental Fragella cache-sync in the background (one prefix batch per request) so new perfumes keep being ingested over time.
+
+Optional sync tuning:
+
+```bash
+FRAGELLA_SYNC_BATCH_LIMIT=500
+FRAGELLA_SYNC_MAX_DEPTH=3
+```
 
 ## Deploy On Vercel
 

@@ -28,6 +28,18 @@ export type FragranceResult = Fragrance & {
   matchedOn: string[];
 };
 
+export type CatalogSyncStatus = "syncing" | "complete" | "disabled" | "error";
+
+export type CatalogSyncProgress = {
+  status: CatalogSyncStatus;
+  processedPrefixes: number;
+  totalPrefixes: number;
+  queueSize: number;
+  latestBatchCount: number;
+  lastPrefix?: string;
+  note?: string;
+};
+
 export type FragranceSearchResponse = {
   results: FragranceResult[];
   total: number;
@@ -35,6 +47,7 @@ export type FragranceSearchResponse = {
   source: "local" | "postgres" | "fragella";
   sourceLabel: string;
   dataNotice?: string;
+  sync?: CatalogSyncProgress;
 };
 
 const tokenAliases: Record<string, string[]> = {
