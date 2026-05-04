@@ -23,13 +23,27 @@ export default function FragranceResultCard({ fragrance, index, selected, onSele
       }`}
       style={{ animationDelay: `${Math.min(index * 70, 420)}ms` }}
     >
-      <button className="grid w-full gap-4 p-2 text-left sm:grid-cols-[9rem_1fr]" type="button" onClick={() => onSelect(fragrance)}>
+      <button
+        className="grid w-full gap-4 p-2 text-left sm:grid-cols-[9rem_1fr]"
+        type="button"
+        aria-pressed={selected}
+        onClick={() => onSelect(fragrance)}
+      >
         <div
           className="relative min-h-36 overflow-hidden rounded-[1.5rem] border border-white/45 shadow-glow"
           style={{ background: `linear-gradient(145deg, ${fragrance.colorA}, ${fragrance.colorB})` }}
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_20%,rgba(255,255,255,0.82),transparent_24%),linear-gradient(145deg,rgba(255,255,255,0.2),transparent)]" />
-          {fragrance.imageUrl ? <img src={fragrance.imageUrl} alt="" className="absolute inset-0 h-full w-full object-contain p-5" /> : null}
+          {fragrance.imageUrl ? (
+            <img
+              src={fragrance.imageUrl}
+              alt={`${fragrance.name} bottle`}
+              className="absolute inset-0 h-full w-full object-contain p-5"
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+            />
+          ) : null}
           <div className="absolute bottom-3 left-3 right-3 rounded-2xl border border-white/25 bg-white/20 p-3 text-milk backdrop-blur-xl">
             <p className="text-xs font-black uppercase tracking-[0.2em] opacity-75">{fragrance.concentration}</p>
             <p className="font-display text-xl font-black tracking-[-0.05em]">{fragrance.priceBand}</p>
@@ -63,7 +77,7 @@ export default function FragranceResultCard({ fragrance, index, selected, onSele
             </div>
           </div>
 
-                <p className="line-clamp-2 text-sm font-semibold leading-6 text-ink/62">{fragrance.description}</p>
+          <p className="line-clamp-2 text-sm font-semibold leading-6 text-ink/62">{fragrance.description}</p>
 
           <div className="grid gap-2 md:grid-cols-3">
             <Metric label="Price" value={fragrance.price > 0 ? currency.format(fragrance.price) : "Market"} />

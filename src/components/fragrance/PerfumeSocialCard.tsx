@@ -49,17 +49,21 @@ export default function PerfumeSocialCard({ fragrance }: Props) {
           <div className="rounded-[1.35rem] border border-white/75 bg-white/62 p-4 shadow-sm">
             <p className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-ink/42">Notes</p>
             <div className="grid grid-cols-3 gap-3">
-              {notes.map((note) => (
-                <div key={note} className="rounded-2xl border border-white/80 bg-white/75 p-2 text-center shadow-sm">
-                  <div
-                    className="mb-2 grid aspect-square place-items-center rounded-xl text-lg font-black text-white"
-                    style={{ background: `linear-gradient(145deg, ${fragrance.colorA}, ${fragrance.colorB})` }}
-                  >
-                    {note.charAt(0).toUpperCase()}
+              {notes.length ? (
+                notes.map((note) => (
+                  <div key={note} className="rounded-2xl border border-white/80 bg-white/75 p-2 text-center shadow-sm">
+                    <div
+                      className="mb-2 grid aspect-square place-items-center rounded-xl text-lg font-black text-white"
+                      style={{ background: `linear-gradient(145deg, ${fragrance.colorA}, ${fragrance.colorB})` }}
+                    >
+                      {note.charAt(0).toUpperCase()}
+                    </div>
+                    <p className="text-xs font-bold capitalize leading-tight text-ink/65">{note}</p>
                   </div>
-                  <p className="text-xs font-bold capitalize leading-tight text-ink/65">{note}</p>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="col-span-3 rounded-2xl bg-white/70 p-4 text-sm font-bold text-ink/55">No note data yet.</p>
+              )}
             </div>
           </div>
         </div>
@@ -79,6 +83,7 @@ export default function PerfumeSocialCard({ fragrance }: Props) {
                   {accord}
                 </div>
               ))}
+              {!fragrance.accords.length ? <p className="text-sm font-bold text-ink/55">No accord data yet.</p> : null}
             </div>
           </CardPanel>
 
@@ -137,7 +142,14 @@ function RealBottleImage({ fragrance }: { fragrance: FragranceResult }) {
           className="absolute inset-0 overflow-hidden rounded-[2rem] border border-white/45 bg-white/35 shadow-glow backdrop-blur-xl"
           style={{ background: `radial-gradient(circle at 30% 20%, ${fragrance.colorA}, transparent 42%), rgba(255,255,255,0.42)` }}
         >
-          <img src={fragrance.imageUrl} alt={`${fragrance.name} bottle`} className="absolute inset-0 h-full w-full object-contain p-5" />
+          <img
+            src={fragrance.imageUrl}
+            alt={`${fragrance.name} bottle`}
+            className="absolute inset-0 h-full w-full object-contain p-5"
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+          />
         </div>
       </div>
     </div>

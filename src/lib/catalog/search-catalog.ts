@@ -7,7 +7,13 @@ import {
   searchPostgresFragrances,
   upsertFragrances,
 } from "@/lib/catalog/postgres-provider";
-import { searchFragrances, type CatalogSyncProgress, type FinderParams, type FragranceSearchResponse } from "@/lib/fragrance-search";
+import {
+  sanitizeFinderParams,
+  searchFragrances,
+  type CatalogSyncProgress,
+  type FinderParams,
+  type FragranceSearchResponse,
+} from "@/lib/fragrance-search";
 
 function localFallback(params: FinderParams, message?: string): FragranceSearchResponse {
   const localResults = searchFragrances(params);
@@ -19,9 +25,11 @@ function localFallback(params: FinderParams, message?: string): FragranceSearchR
   };
 }
 
-function parsePositiveInt(value: string | undefined, fallback: number) {
+function parsePositiveInt(value: string | undefined, fallback: number, max: number) {
   const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+
+  return Math.min(parsed, max);
 }
 
 function hasSearchIntent(params: FinderParams) {
@@ -64,25 +72,26 @@ function syncNotice(sync?: CatalogSyncProgress) {
 }
 
 export async function searchCatalog(params: FinderParams): Promise<FragranceSearchResponse> {
+  const safeParams = sanitizeFinderParams(params);
   const requestedSource = process.env.FRAGRANCE_DATA_SOURCE;
   const databaseUrl = process.env.DATABASE_URL;
   const fragellaApiKey = process.env.FRAGELLA_API_KEY;
   const staticExport = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
-  const syncLimit = parsePositiveInt(process.env.FRAGELLA_SYNC_BATCH_LIMIT, 500);
-  const syncMaxDepth = parsePositiveInt(process.env.FRAGELLA_SYNC_MAX_DEPTH, 3);
-  const syncMinIntervalSeconds = parsePositiveInt(process.env.FRAGELLA_SYNC_MIN_INTERVAL_SECONDS, 30);
-  const shouldRunSyncStep = !hasSearchIntent(params);
+  const syncLimit = parsePositiveInt(process.env.FRAGELLA_SYNC_BATCH_LIMIT, 500, 500);
+  const syncMaxDepth = parsePositiveInt(process.env.FRAGELLA_SYNC_MAX_DEPTH, 3, 4);
+  const syncMinIntervalSeconds = parsePositiveInt(process.env.FRAGELLA_SYNC_MIN_INTERVAL_SECONDS, 30, 3600);
+  const shouldRunSyncStep = !hasSearchIntent(safeParams);
 
   if (staticExport) {
-    return localFallback(params, "Static export mode is enabled, so live API/database search is unavailable.");
+    return localFallback(safeParams, "Static export mode is enabled, so live API/database search is unavailable.");
   }
 
   if (requestedSource === "postgres" && !databaseUrl) {
-    return localFallback(params, "FRAGRANCE_DATA_SOURCE is set to postgres, but DATABASE_URL is missing.");
+    return localFallback(safeParams, "FRAGRANCE_DATA_SOURCE is set to postgres, but DATABASE_URL is missing.");
   }
 
   if (requestedSource === "fragella" && !fragellaApiKey) {
-    return localFallback(params, "FRAGRANCE_DATA_SOURCE is set to fragella, but FRAGELLA_API_KEY is missing.");
+    return localFallback(safeParams, "FRAGRANCE_DATA_SOURCE is set to fragella, but FRAGELLA_API_KEY is missing.");
   }
 
   try {
@@ -91,12 +100,12 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
       if (!catalogReady) {
         if (!fragellaApiKey) {
           return localFallback(
-            params,
+            safeParams,
             "PostgreSQL catalog tables are missing and FRAGELLA_API_KEY is unavailable. Run database/schema.sql in Neon.",
           );
         }
 
-        const fragellaResults = await searchFragellaFragrances(params, fragellaApiKey);
+        const fragellaResults = await searchFragellaFragrances(safeParams, fragellaApiKey);
 
         return {
           ...fragellaResults,
@@ -132,7 +141,7 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
           );
 
       const [postgresResults, databaseSize] = await Promise.all([
-        searchPostgresFragrances(params, databaseUrl),
+        searchPostgresFragrances(safeParams, databaseUrl),
         countPostgresFragrances(databaseUrl),
       ]);
 
@@ -146,7 +155,7 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
         };
       }
 
-      const fragellaResults = await searchFragellaFragrances(params, fragellaApiKey);
+      const fragellaResults = await searchFragellaFragrances(safeParams, fragellaApiKey);
       let warmedDatabaseSize = databaseSize;
       let cacheWriteNotice: string | undefined;
       try {
@@ -170,7 +179,7 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
     }
 
     if ((requestedSource === "fragella" || (!requestedSource && fragellaApiKey)) && fragellaApiKey) {
-      const fragellaResults = await searchFragellaFragrances(params, fragellaApiKey);
+      const fragellaResults = await searchFragellaFragrances(safeParams, fragellaApiKey);
 
       return fragellaResults;
     }
@@ -180,7 +189,7 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
 
     if (fragellaApiKey) {
       try {
-        const fragellaResults = await searchFragellaFragrances(params, fragellaApiKey);
+        const fragellaResults = await searchFragellaFragrances(safeParams, fragellaApiKey);
 
         return {
           ...fragellaResults,
@@ -197,12 +206,12 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
         };
       } catch (fragellaError) {
         console.error(fragellaError);
-        return localFallback(params, describeError(fragellaError));
+        return localFallback(safeParams, describeError(fragellaError));
       }
     }
 
-    return localFallback(params, `Live catalog lookup failed (${rootError}), so the local starter catalog is being used.`);
+    return localFallback(safeParams, `Live catalog lookup failed (${rootError}), so the local starter catalog is being used.`);
   }
 
-  return searchFragrances(params);
+  return searchFragrances(safeParams);
 }

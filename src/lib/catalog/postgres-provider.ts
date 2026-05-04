@@ -7,7 +7,9 @@ import {
   type CatalogSyncProgress,
   type FinderParams,
   type FragranceSearchResponse,
+  sanitizeFinderParams,
 } from "@/lib/fragrance-search";
+import { clampNumber, sanitizeCssColor, sanitizeExternalImageUrl, sanitizePlainText, sanitizeTextArray } from "@/lib/safety";
 
 type FragranceRow = {
   id: string;
@@ -115,36 +117,36 @@ function priceBand(price: number): Fragrance["priceBand"] {
 }
 
 function mapRow(row: FragranceRow): Fragrance {
-  const price = Number(row.price_usd ?? 0);
+  const price = clampNumber(row.price_usd, 0, 0, 10000);
 
   return {
-    id: row.id,
-    name: row.name,
-    house: row.house,
+    id: sanitizePlainText(row.id, 180) || "unknown-fragrance",
+    name: sanitizePlainText(row.name, 160) || "Unknown fragrance",
+    house: sanitizePlainText(row.house, 120) || "Unknown house",
     kind: row.kind ?? "Original",
-    dupeFor: row.dupe_for ?? undefined,
-    year: row.year ?? undefined,
-    imageUrl: row.image_url ?? undefined,
-    country: row.country ?? undefined,
-    votes: row.rating_votes ?? undefined,
+    dupeFor: sanitizePlainText(row.dupe_for, 160) || undefined,
+    year: clampNumber(row.year, 0, 0, new Date().getFullYear() + 1) || undefined,
+    imageUrl: sanitizeExternalImageUrl(row.image_url),
+    country: sanitizePlainText(row.country, 80) || undefined,
+    votes: clampNumber(row.rating_votes, 0, 0, 100000000) || undefined,
     price,
     priceBand: row.price_band ?? priceBand(price),
-    popularity: Number(row.popularity_score ?? 50),
-    rating: Number(row.rating ?? 0),
-    concentration: row.concentration ?? "Fragrance",
+    popularity: clampNumber(row.popularity_score, 50, 0, 100),
+    rating: clampNumber(row.rating, 0, 0, 5),
+    concentration: sanitizePlainText(row.concentration, 80) || "Fragrance",
     gender: row.gender ?? "Unisex",
-    topNotes: row.top_notes ?? [],
-    heartNotes: row.heart_notes ?? [],
-    baseNotes: row.base_notes ?? [],
-    accords: row.accords ?? [],
-    moods: row.moods ?? [],
-    occasions: row.occasions ?? [],
-    seasons: row.seasons ?? [],
+    topNotes: sanitizeTextArray(row.top_notes ?? [], 8, 48),
+    heartNotes: sanitizeTextArray(row.heart_notes ?? [], 8, 48),
+    baseNotes: sanitizeTextArray(row.base_notes ?? [], 8, 48),
+    accords: sanitizeTextArray(row.accords ?? [], 12, 48),
+    moods: sanitizeTextArray(row.moods ?? [], 10, 48),
+    occasions: sanitizeTextArray(row.occasions ?? [], 10, 48),
+    seasons: sanitizeTextArray(row.seasons ?? [], 8, 32),
     projection: row.projection ?? "Moderate",
-    longevityHours: Number(row.longevity_hours ?? 6),
-    colorA: row.color_a ?? "#dfe8d8",
-    colorB: row.color_b ?? "#243e39",
-    description: row.description ?? `${row.name} by ${row.house}.`,
+    longevityHours: clampNumber(row.longevity_hours, 6, 0, 48),
+    colorA: sanitizeCssColor(row.color_a, "#dfe8d8"),
+    colorB: sanitizeCssColor(row.color_b, "#243e39"),
+    description: sanitizePlainText(row.description, 500) || `${row.name} by ${row.house}.`,
   };
 }
 
@@ -619,10 +621,11 @@ export async function searchPostgresFragrances(
   params: FinderParams,
   databaseUrl: string,
 ): Promise<FragranceSearchResponse> {
+  const safeParams = sanitizeFinderParams(params);
   const sql = getClient(databaseUrl);
-  const query = params.query?.trim() ?? "";
+  const query = safeParams.query?.trim() ?? "";
   const tsQuery = query.length > 0 ? query : null;
-  const accords = params.accords ?? [];
+  const accords = safeParams.accords ?? [];
 
   const rows = await sql<FragranceRow[]>`
     select
@@ -662,16 +665,16 @@ export async function searchPostgresFragrances(
         or house ilike ${`%${query}%`}
       )
       and (${accords.length === 0} or accords && ${accords})
-      and (${params.kind === "dupe" ? "Dupe" : ""} = '' or kind = 'Dupe')
-      and (${params.kind === "original" ? "Original" : ""} = '' or kind = 'Original')
-      and (${params.budget !== "under-50"} or price_usd < 50)
-      and (${params.budget !== "under-100"} or price_usd < 100)
-      and (${params.budget !== "under-200"} or price_usd < 200)
-      and (${params.budget !== "premium"} or price_usd >= 200)
+      and (${safeParams.kind === "dupe" ? "Dupe" : ""} = '' or kind = 'Dupe')
+      and (${safeParams.kind === "original" ? "Original" : ""} = '' or kind = 'Original')
+      and (${safeParams.budget !== "under-50"} or price_usd < 50)
+      and (${safeParams.budget !== "under-100"} or price_usd < 100)
+      and (${safeParams.budget !== "under-200"} or price_usd < 200)
+      and (${safeParams.budget !== "premium"} or price_usd >= 200)
       and (
-        ${!params.gender || params.gender === "all"}
+        ${!safeParams.gender || safeParams.gender === "all"}
         or gender = 'Unisex'
-        or lower(gender) = ${params.gender ?? "all"}
+        or lower(gender) = ${safeParams.gender ?? "all"}
       )
     order by
       case when ${tsQuery !== null} then ts_rank_cd(search_vector, websearch_to_tsquery('english', ${tsQuery})) else 0 end desc,

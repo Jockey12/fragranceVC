@@ -2,6 +2,8 @@ import FragranceFinder from "@/components/FragranceFinder";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { searchCatalog } from "@/lib/catalog/search-catalog";
 
+export const dynamic = "force-dynamic";
+
 export default async function SelectorPage() {
   const initialResults = await searchCatalog({ sort: "popularity" });
   const apiEnabled = process.env.NEXT_PUBLIC_STATIC_EXPORT !== "true";

@@ -82,6 +82,7 @@ const quickBriefs = [
 ];
 
 const RESULTS_BATCH_SIZE = 24;
+const QUERY_MAX_LENGTH = 180;
 
 export default function FragranceFinder({ initialData, apiEnabled = true }: Props) {
   const [query, setQuery] = useState("");
@@ -116,6 +117,7 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
 
   useEffect(() => {
     const controller = new AbortController();
+    let active = true;
     const params = new URLSearchParams();
 
     if (deferredQuery.trim()) params.set("query", deferredQuery.trim());
@@ -152,7 +154,10 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
       });
       setIsLoading(false);
 
-      return () => controller.abort();
+      return () => {
+        active = false;
+        controller.abort();
+      };
     }
 
     fetch(`/api/fragrances?${params.toString()}`, { signal: controller.signal })
@@ -164,6 +169,7 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
         return response.json() as Promise<FragranceSearchResponse>;
       })
       .then((nextData) => {
+        if (!active) return;
         setData(nextData);
         setSelected((current) => {
           if (!nextData.results.length) return undefined;
@@ -175,9 +181,14 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
           console.error(error);
         }
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
 
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [budget, deferredQuery, gender, kind, mood, occasion, selectedAccords, sort, syncTick]);
 
   useEffect(() => {
@@ -228,7 +239,10 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
   }
 
   return (
-    <div className="glass-panel animate-fade-up rounded-[2.5rem] p-4 [animation-delay:220ms] sm:p-6 lg:p-7">
+    <div
+      className="glass-panel animate-fade-up rounded-[2.5rem] p-4 [animation-delay:220ms] sm:p-6 lg:p-7"
+      aria-busy={isLoading || isPending}
+    >
       <BubbleBurst key={bubbleBurst} active={bubbleBurst > 0} fragrance={selected} />
       <div className="relative z-10 grid gap-5">
         <div className="grid gap-4 rounded-[2rem] border border-white/50 bg-white/30 p-4 backdrop-blur-2xl">
@@ -250,6 +264,7 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
             className="min-h-28 resize-none rounded-[1.5rem] border border-white/60 bg-milk/55 p-4 text-base font-semibold leading-7 text-ink outline-none ring-0 backdrop-blur-xl placeholder:text-ink/35 focus:border-ink/30"
             placeholder="Example: I want to smell clean, expensive, a little sweet, and good for date night..."
             value={query}
+            maxLength={QUERY_MAX_LENGTH}
             onChange={(event) => setQuery(event.target.value)}
           />
 
@@ -283,6 +298,7 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
                           : "border-white/55 bg-white/35 text-ink/65 hover:bg-white/60"
                       }`}
                       type="button"
+                      aria-pressed={isSelected}
                       onClick={() => toggleAccord(accord)}
                     >
                       {accord}
@@ -336,7 +352,10 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
                     {data.total} matches from {data.databaseSize}
                   </h3>
                 </div>
-                <div className="rounded-full bg-ink/10 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-ink/55">
+                <div
+                  className="rounded-full bg-ink/10 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-ink/55"
+                  aria-live="polite"
+                >
                   {isLoading || isPending ? "Searching" : data.sourceLabel}
                 </div>
               </div>
@@ -361,6 +380,7 @@ export default function FragranceFinder({ initialData, apiEnabled = true }: Prop
                         : "border-white/55 bg-white/35 text-ink/65 hover:bg-white/60"
                     }`}
                     type="button"
+                    aria-pressed={kind === item.value}
                     onClick={() => setKind(item.value)}
                   >
                     {item.label}

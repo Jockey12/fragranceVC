@@ -8,9 +8,15 @@ export default function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("fragrancevc-theme") as Theme | null;
+    let saved: Theme | null = null;
+    try {
+      saved = window.localStorage.getItem("fragrancevc-theme") as Theme | null;
+    } catch {
+      saved = null;
+    }
+
     const preferred: Theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    const nextTheme = saved ?? preferred;
+    const nextTheme = saved === "dark" || saved === "light" ? saved : preferred;
 
     setTheme(nextTheme);
     document.documentElement.classList.toggle("dark", nextTheme === "dark");
@@ -20,7 +26,11 @@ export default function ThemeToggle() {
     const nextTheme: Theme = theme === "dark" ? "light" : "dark";
 
     setTheme(nextTheme);
-    window.localStorage.setItem("fragrancevc-theme", nextTheme);
+    try {
+      window.localStorage.setItem("fragrancevc-theme", nextTheme);
+    } catch {
+      // Theme still updates for the current page even when storage is unavailable.
+    }
     document.documentElement.classList.toggle("dark", nextTheme === "dark");
   }
 

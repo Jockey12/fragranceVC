@@ -1,4 +1,5 @@
 import { fragrances, type Fragrance, type FragranceGender, type FragranceKind } from "@/data/fragrances";
+import { sanitizePlainText, sanitizeTextArray } from "@/lib/safety";
 
 export type FinderSort =
   | "match"
@@ -50,6 +51,10 @@ export type FragranceSearchResponse = {
   sync?: CatalogSyncProgress;
 };
 
+const MAX_QUERY_LENGTH = 180;
+const MAX_FILTER_VALUE_LENGTH = 48;
+const MAX_ACCORD_FILTERS = 12;
+
 const tokenAliases: Record<string, string[]> = {
   expensive: ["luxury", "polished", "quiet luxury", "signature"],
   rich: ["luxury", "amber", "boozy", "vanilla"],
@@ -77,6 +82,16 @@ function normalize(value: string) {
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+export function sanitizeFinderParams(params: FinderParams = {}): FinderParams {
+  return {
+    ...params,
+    query: sanitizePlainText(params.query ?? "", MAX_QUERY_LENGTH),
+    accords: sanitizeTextArray(params.accords ?? [], MAX_ACCORD_FILTERS, MAX_FILTER_VALUE_LENGTH),
+    mood: sanitizePlainText(params.mood ?? "any", MAX_FILTER_VALUE_LENGTH) || "any",
+    occasion: sanitizePlainText(params.occasion ?? "any", MAX_FILTER_VALUE_LENGTH) || "any",
+  };
 }
 
 function getSearchText(fragrance: Fragrance) {
@@ -220,15 +235,16 @@ export function searchFragranceList(
     dataNotice: "Connect Fragella or import FragDB into PostgreSQL for a full perfume catalog.",
   },
 ): FragranceSearchResponse {
+  const safeParams = sanitizeFinderParams(params);
   const fullParams: Required<FinderParams> = {
-    query: params.query ?? "",
-    accords: params.accords ?? [],
-    mood: params.mood ?? "any",
-    occasion: params.occasion ?? "any",
-    budget: params.budget ?? "all",
-    gender: params.gender ?? "all",
-    kind: params.kind ?? "all",
-    sort: params.sort ?? "match",
+    query: safeParams.query ?? "",
+    accords: safeParams.accords ?? [],
+    mood: safeParams.mood ?? "any",
+    occasion: safeParams.occasion ?? "any",
+    budget: safeParams.budget ?? "all",
+    gender: safeParams.gender ?? "all",
+    kind: safeParams.kind ?? "all",
+    sort: safeParams.sort ?? "match",
   };
 
   const hasIntent =
