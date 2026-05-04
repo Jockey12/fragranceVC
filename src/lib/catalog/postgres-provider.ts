@@ -194,154 +194,258 @@ export async function upsertFragrances(fragrances: Fragrance[], databaseUrl: str
     for (const fragrance of fragrances) {
       const row = toDbFragrance(fragrance);
 
-      await transaction`
-        insert into app_fragrances (
-          id,
-          name,
-          house,
-          kind,
-          dupe_for,
-          year,
-          image_url,
-          country,
-          price_usd,
-          price_band,
-          popularity_score,
-          rating,
-          rating_votes,
-          concentration,
-          gender,
-          top_notes,
-          heart_notes,
-          base_notes,
-          accords,
-          moods,
-          occasions,
-          seasons,
-          projection,
-          longevity_hours,
-          color_a,
-          color_b,
-          description,
-          raw,
-          search_vector,
-          updated_at
-        )
-        values (
-          ${row.id},
-          ${row.name},
-          ${row.house},
-          ${row.kind},
-          ${row.dupe_for},
-          ${row.year},
-          ${row.image_url},
-          ${row.country},
-          ${row.price_usd},
-          ${row.price_band},
-          ${row.popularity_score},
-          ${row.rating},
-          ${row.rating_votes},
-          ${row.concentration},
-          ${row.gender},
-          ${row.top_notes},
-          ${row.heart_notes},
-          ${row.base_notes},
-          ${row.accords},
-          ${row.moods},
-          ${row.occasions},
-          ${row.seasons},
-          ${row.projection},
-          ${row.longevity_hours},
-          ${row.color_a},
-          ${row.color_b},
-          ${row.description},
-          ${row.raw}::jsonb,
-          (
-            setweight(to_tsvector('english', unaccent(${row.name})), 'A') ||
-            setweight(to_tsvector('english', unaccent(${row.house})), 'A') ||
-            setweight(to_tsvector('english', unaccent(${row.description ?? ""})), 'B') ||
-            setweight(to_tsvector('english', unaccent(${(row.accords ?? []).join(" ")})), 'B') ||
-            setweight(
-              to_tsvector(
-                'english',
-                unaccent(${[...(row.top_notes ?? []), ...(row.heart_notes ?? []), ...(row.base_notes ?? [])].join(" ")}),
-              ),
-              'C'
-            ) ||
-            setweight(
-              to_tsvector(
-                'english',
-                unaccent(${[...(row.moods ?? []), ...(row.occasions ?? []), ...(row.seasons ?? [])].join(" ")}),
-              ),
-              'D'
-            )
-          ),
-          now()
-        )
-        on conflict (id) do update set
-          name = excluded.name,
-          house = excluded.house,
-          kind = excluded.kind,
-          dupe_for = excluded.dupe_for,
-          year = excluded.year,
-          image_url = excluded.image_url,
-          country = excluded.country,
-          price_usd = excluded.price_usd,
-          price_band = excluded.price_band,
-          popularity_score = excluded.popularity_score,
-          rating = excluded.rating,
-          rating_votes = excluded.rating_votes,
-          concentration = excluded.concentration,
-          gender = excluded.gender,
-          top_notes = excluded.top_notes,
-          heart_notes = excluded.heart_notes,
-          base_notes = excluded.base_notes,
-          accords = excluded.accords,
-          moods = excluded.moods,
-          occasions = excluded.occasions,
-          seasons = excluded.seasons,
-          projection = excluded.projection,
-          longevity_hours = excluded.longevity_hours,
-          color_a = excluded.color_a,
-          color_b = excluded.color_b,
-          description = excluded.description,
-          raw = app_fragrances.raw || excluded.raw,
-          search_vector = (
-            setweight(to_tsvector('english', unaccent(coalesce(excluded.name, ''))), 'A') ||
-            setweight(to_tsvector('english', unaccent(coalesce(excluded.house, ''))), 'A') ||
-            setweight(to_tsvector('english', unaccent(coalesce(excluded.description, ''))), 'B') ||
-            setweight(to_tsvector('english', unaccent(array_to_string(coalesce(excluded.accords, '{}'::text[]), ' '))), 'B') ||
-            setweight(
-              to_tsvector(
-                'english',
-                unaccent(
-                  array_to_string(
-                    coalesce(excluded.top_notes, '{}'::text[]) ||
-                    coalesce(excluded.heart_notes, '{}'::text[]) ||
-                    coalesce(excluded.base_notes, '{}'::text[]),
-                    ' '
+      try {
+        await transaction`
+          insert into app_fragrances (
+            id,
+            name,
+            house,
+            kind,
+            dupe_for,
+            year,
+            image_url,
+            country,
+            price_usd,
+            price_band,
+            popularity_score,
+            rating,
+            rating_votes,
+            concentration,
+            gender,
+            top_notes,
+            heart_notes,
+            base_notes,
+            accords,
+            moods,
+            occasions,
+            seasons,
+            projection,
+            longevity_hours,
+            color_a,
+            color_b,
+            description,
+            raw,
+            search_vector,
+            updated_at
+          )
+          values (
+            ${row.id},
+            ${row.name},
+            ${row.house},
+            ${row.kind},
+            ${row.dupe_for},
+            ${row.year},
+            ${row.image_url},
+            ${row.country},
+            ${row.price_usd},
+            ${row.price_band},
+            ${row.popularity_score},
+            ${row.rating},
+            ${row.rating_votes},
+            ${row.concentration},
+            ${row.gender},
+            ${row.top_notes},
+            ${row.heart_notes},
+            ${row.base_notes},
+            ${row.accords},
+            ${row.moods},
+            ${row.occasions},
+            ${row.seasons},
+            ${row.projection},
+            ${row.longevity_hours},
+            ${row.color_a},
+            ${row.color_b},
+            ${row.description},
+            ${row.raw}::jsonb,
+            (
+              setweight(to_tsvector('english', unaccent(${row.name})), 'A') ||
+              setweight(to_tsvector('english', unaccent(${row.house})), 'A') ||
+              setweight(to_tsvector('english', unaccent(${row.description ?? ""})), 'B') ||
+              setweight(to_tsvector('english', unaccent(${(row.accords ?? []).join(" ")})), 'B') ||
+              setweight(
+                to_tsvector(
+                  'english',
+                  unaccent(${[...(row.top_notes ?? []), ...(row.heart_notes ?? []), ...(row.base_notes ?? [])].join(" ")})
+                ),
+                'C'
+              ) ||
+              setweight(
+                to_tsvector(
+                  'english',
+                  unaccent(${[...(row.moods ?? []), ...(row.occasions ?? []), ...(row.seasons ?? [])].join(" ")})
+                ),
+                'D'
+              )
+            ),
+            now()
+          )
+          on conflict (id) do update set
+            name = excluded.name,
+            house = excluded.house,
+            kind = excluded.kind,
+            dupe_for = excluded.dupe_for,
+            year = excluded.year,
+            image_url = excluded.image_url,
+            country = excluded.country,
+            price_usd = excluded.price_usd,
+            price_band = excluded.price_band,
+            popularity_score = excluded.popularity_score,
+            rating = excluded.rating,
+            rating_votes = excluded.rating_votes,
+            concentration = excluded.concentration,
+            gender = excluded.gender,
+            top_notes = excluded.top_notes,
+            heart_notes = excluded.heart_notes,
+            base_notes = excluded.base_notes,
+            accords = excluded.accords,
+            moods = excluded.moods,
+            occasions = excluded.occasions,
+            seasons = excluded.seasons,
+            projection = excluded.projection,
+            longevity_hours = excluded.longevity_hours,
+            color_a = excluded.color_a,
+            color_b = excluded.color_b,
+            description = excluded.description,
+            raw = app_fragrances.raw || excluded.raw,
+            search_vector = (
+              setweight(to_tsvector('english', unaccent(coalesce(excluded.name, ''))), 'A') ||
+              setweight(to_tsvector('english', unaccent(coalesce(excluded.house, ''))), 'A') ||
+              setweight(to_tsvector('english', unaccent(coalesce(excluded.description, ''))), 'B') ||
+              setweight(to_tsvector('english', unaccent(array_to_string(coalesce(excluded.accords, '{}'::text[]), ' '))), 'B') ||
+              setweight(
+                to_tsvector(
+                  'english',
+                  unaccent(
+                    array_to_string(
+                      coalesce(excluded.top_notes, '{}'::text[]) ||
+                      coalesce(excluded.heart_notes, '{}'::text[]) ||
+                      coalesce(excluded.base_notes, '{}'::text[]),
+                      ' '
+                    )
                   )
-                )
-              ),
-              'C'
-            ) ||
-            setweight(
-              to_tsvector(
-                'english',
-                unaccent(
-                  array_to_string(
-                    coalesce(excluded.moods, '{}'::text[]) ||
-                    coalesce(excluded.occasions, '{}'::text[]) ||
-                    coalesce(excluded.seasons, '{}'::text[]),
-                    ' '
+                ),
+                'C'
+              ) ||
+              setweight(
+                to_tsvector(
+                  'english',
+                  unaccent(
+                    array_to_string(
+                      coalesce(excluded.moods, '{}'::text[]) ||
+                      coalesce(excluded.occasions, '{}'::text[]) ||
+                      coalesce(excluded.seasons, '{}'::text[]),
+                      ' '
+                    )
                   )
-                )
-              ),
-              'D'
-            )
-          ),
-          updated_at = now()
-      `;
+                ),
+                'D'
+              )
+            ),
+            updated_at = now()
+        `;
+      } catch (error) {
+        const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+        const generatedSearchVector =
+          message.includes("search_vector") && (message.includes("generated") || message.includes("cannot insert"));
+
+        if (!generatedSearchVector) {
+          throw error;
+        }
+
+        await transaction`
+          insert into app_fragrances (
+            id,
+            name,
+            house,
+            kind,
+            dupe_for,
+            year,
+            image_url,
+            country,
+            price_usd,
+            price_band,
+            popularity_score,
+            rating,
+            rating_votes,
+            concentration,
+            gender,
+            top_notes,
+            heart_notes,
+            base_notes,
+            accords,
+            moods,
+            occasions,
+            seasons,
+            projection,
+            longevity_hours,
+            color_a,
+            color_b,
+            description,
+            raw,
+            updated_at
+          )
+          values (
+            ${row.id},
+            ${row.name},
+            ${row.house},
+            ${row.kind},
+            ${row.dupe_for},
+            ${row.year},
+            ${row.image_url},
+            ${row.country},
+            ${row.price_usd},
+            ${row.price_band},
+            ${row.popularity_score},
+            ${row.rating},
+            ${row.rating_votes},
+            ${row.concentration},
+            ${row.gender},
+            ${row.top_notes},
+            ${row.heart_notes},
+            ${row.base_notes},
+            ${row.accords},
+            ${row.moods},
+            ${row.occasions},
+            ${row.seasons},
+            ${row.projection},
+            ${row.longevity_hours},
+            ${row.color_a},
+            ${row.color_b},
+            ${row.description},
+            ${row.raw}::jsonb,
+            now()
+          )
+          on conflict (id) do update set
+            name = excluded.name,
+            house = excluded.house,
+            kind = excluded.kind,
+            dupe_for = excluded.dupe_for,
+            year = excluded.year,
+            image_url = excluded.image_url,
+            country = excluded.country,
+            price_usd = excluded.price_usd,
+            price_band = excluded.price_band,
+            popularity_score = excluded.popularity_score,
+            rating = excluded.rating,
+            rating_votes = excluded.rating_votes,
+            concentration = excluded.concentration,
+            gender = excluded.gender,
+            top_notes = excluded.top_notes,
+            heart_notes = excluded.heart_notes,
+            base_notes = excluded.base_notes,
+            accords = excluded.accords,
+            moods = excluded.moods,
+            occasions = excluded.occasions,
+            seasons = excluded.seasons,
+            projection = excluded.projection,
+            longevity_hours = excluded.longevity_hours,
+            color_a = excluded.color_a,
+            color_b = excluded.color_b,
+            description = excluded.description,
+            raw = app_fragrances.raw || excluded.raw,
+            updated_at = now()
+        `;
+      }
     }
   });
 

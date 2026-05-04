@@ -147,18 +147,22 @@ export async function searchCatalog(params: FinderParams): Promise<FragranceSear
       }
 
       const fragellaResults = await searchFragellaFragrances(params, fragellaApiKey);
+      let warmedDatabaseSize = databaseSize;
+      let cacheWriteNotice: string | undefined;
       try {
         await upsertFragrances(fragellaResults.results, databaseUrl);
+        warmedDatabaseSize = await countPostgresFragrances(databaseUrl);
       } catch (error) {
         console.error(error);
+        cacheWriteNotice = `Live results loaded, but cache write failed (${describeError(error)}).`;
       }
-      const warmedDatabaseSize = await countPostgresFragrances(databaseUrl);
 
       return {
         ...fragellaResults,
         databaseSize: warmedDatabaseSize,
         sourceLabel: "Fragella API + warming Postgres cache",
         dataNotice:
+          cacheWriteNotice ??
           syncNotice(syncProgress) ??
           "Cache is warming up. Showing live Fragella results and saving them into PostgreSQL.",
         sync: syncProgress,
